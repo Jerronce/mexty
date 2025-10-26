@@ -1,0 +1,141 @@
+{
+  "manifest_version": 3,
+  "name": "Mexty - Jerry's AI Twin",
+  "version": "1.0.0",
+  "description": "Jerry Adedurin's AI twin assistant for job applications, autofill, voice chat, and professional automation.",
+  "author": "Jerry Adedurin",
+  
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    },
+    "default_title": "Mexty - Jerry's AI Twin"
+  },
+
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.linkedin.com/*",
+        "https://www.indeed.com/*",
+        "https://jobs.google.com/*",
+        "https://www.glassdoor.com/*",
+        "https://www.monster.com/*",
+        "https://stackoverflow.com/jobs/*",
+        "https://www.ziprecruiter.com/*",
+        "https://www.dice.com/*",
+        "https://www.simplyhired.com/*",
+        "https://wellfound.com/*",
+        "https://angel.co/*",
+        "https://www.remote.co/*",
+        "https://remoteok.com/*",
+        "https://weworkremotely.com/*",
+        "https://www.upwork.com/*",
+        "https://www.fiverr.com/*",
+        "https://www.freelancer.com/*",
+        "https://*.greenhouse.io/*",
+        "https://*.lever.co/*",
+        "https://*.workable.com/*",
+        "https://*.smartrecruiters.com/*",
+        "https://*.breezy.hr/*",
+        "https://*.bamboohr.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "scripting",
+    "tabs",
+    "notifications",
+    "identity",
+    "alarms"
+  ],
+
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://www.indeed.com/*",
+    "https://jobs.google.com/*",
+    "https://www.glassdoor.com/*",
+    "https://mexty101.web.app/*",
+    "https://mexty101.firebaseapp.com/*",
+    "https://firestore.googleapis.com/*",
+    "https://identitytoolkit.googleapis.com/*",
+    "https://readyplayer.me/*",
+    "https://*.greenhouse.io/*",
+    "https://*.lever.co/*",
+    "https://*.workable.com/*",
+    "https://*.smartrecruiters.com/*"
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "popup.html",
+        "icons/*",
+        "assets/*",
+        "avatar/*",
+        "styles/*"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://mexty101.web.app https://mexty101.firebaseapp.com https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://readyplayer.me wss://*.firebaseio.com;"
+  },
+
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+M",
+        "mac": "Command+Shift+M"
+      },
+      "description": "Open Mexty AI Twin"
+    },
+    "quick_apply": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+A",
+        "mac": "Command+Shift+A"
+      },
+      "description": "Quick apply to job with Mexty"
+    },
+    "voice_chat": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+V",
+        "mac": "Command+Shift+V"
+      },
+      "description": "Start voice chat with Mexty"
+    }
+  },
+
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+
+  "externally_connectable": {
+    "matches": [
+      "https://mexty101.web.app/*",
+      "https://mexty101.firebaseapp.com/*"
+    ]
+  }
+}
