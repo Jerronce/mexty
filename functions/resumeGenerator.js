@@ -15,7 +15,7 @@ const bucket = admin.storage().bucket();
 const allowedOrigins = ['https://mexty101.web.app','https://mexty101.firebaseapp.com',/^chrome-extension:\/[a-z0-9]{32}$/i];
 const corsMiddleware = cors({ origin: (o,cb)=>{ if(!o) return cb(null,true); const ok=allowedOrigins.some(a=> typeof a==='string'? o===a: a.test(o)); return ok?cb(null,true):cb(new Error('Not allowed by CORS')); }, credentials:true, optionsSuccessStatus:200 });
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY });
 const safe = (v,d='')=> typeof v==='string'? v: d; const nowIso = ()=> new Date().toISOString();
 async function getUserProfile(userId){ const snap=await db.collection('profiles').doc(userId).get(); if(!snap.exists) throw new Error('Profile not found'); return snap.data(); }
 function resumePrompt(profile, job){ const skills=Array.isArray(profile.skills)? profile.skills.join(', '): safe(profile.skills); const exp=Array.isArray(profile.experience)? JSON.stringify(profile.experience): safe(profile.experience); const edu=Array.isArray(profile.education)? JSON.stringify(profile.education): safe(profile.education); return `Return JSON only with keys: summary, skills[], experience[{title,company,start,end,achievements[]}], education[{school,degree,start,end}].\nTarget: ${safe(job.jobTitle)} at ${safe(job.companyName)}\nJD: ${safe(job.jobDescription)}\nCandidate name:${safe(profile.name)} title:${safe(profile.title)} summary:${safe(profile.summary)} skills:${skills} exp:${exp} edu:${edu}`; }

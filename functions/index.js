@@ -68,7 +68,7 @@ const corsMiddleware = cors(corsOptions);
  * Initialize AI clients with environment variables
  */
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({ apiKey: import.meta.env.VITE_OPENAI_API_KEY });
 
 /**
  * Initialize Nodemailer transporter for Gmail

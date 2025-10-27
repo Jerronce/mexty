@@ -1,78 +1,32 @@
-// Gemini AI Service - Client-side wrapper
-// Note: This does NOT expose API keys - all calls are proxied through backend
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
-/**
- * Send a chat message to Gemini AI via backend proxy
- * @param {string} message - The user's message
- * @param {Array} history - Chat history for context
- * @returns {Promise<string>} - AI response
- */
-export const sendMessageToGemini = async (message, history = []) => {
+const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
+
+const SYSTEM_PROMPT = `You are Jerry's digital twin, Mexty. You respond as Jerry: friendly, approachable, knows all about his AI/ML portfolio, skills, and projects. You can hold open conversations, answer about work, school, hobbies, or general interests, and update your knowledge from social/profiles as needed. Do not restrict to interview mode.`;
+
+export const generateResponse = async (messages) => {
   try {
-    const response = await fetch('/api/chat/gemini', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
+    
+    const chat = model.startChat({
+      history: messages.slice(0, -1).map(msg => ({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      })),
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 1000,
       },
-      body: JSON.stringify({
-        message,
-        history,
-      }),
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.response;
+    const lastMessage = messages[messages.length - 1];
+    const result = await chat.sendMessage(`${SYSTEM_PROMPT}\n\n${lastMessage.content}`);
+    const response = await result.response;
+    return response.text();
   } catch (error) {
-    console.error('Error communicating with Gemini AI:', error);
+    console.error('Gemini API Error:', error);
     throw error;
   }
 };
 
-/**
- * Stream response from Gemini AI (for real-time chat)
- * @param {string} message - The user's message
- * @param {Array} history - Chat history for context
- * @param {Function} onChunk - Callback for each response chunk
- * @returns {Promise<void>}
- */
-export const streamGeminiResponse = async (message, history = [], onChunk) => {
-  try {
-    const response = await fetch('/api/chat/gemini/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        message,
-        history,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value);
-      onChunk(chunk);
-    }
-  } catch (error) {
-    console.error('Error streaming from Gemini AI:', error);
-    throw error;
-  }
-};
-
-export default {
-  sendMessageToGemini,
-  streamGeminiResponse,
-};
+export default { generateResponse };

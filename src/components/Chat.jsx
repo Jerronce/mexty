@@ -1,292 +1,165 @@
-import { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Send, Loader2, MessageSquare, Volume2 } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { generateResponse } from '../services/openai';
 
 const Chat = () => {
   const [messages, setMessages] = useState([]);
-  const [inputText, setInputText] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('gemini'); // 'gemini' or 'openai'
-  const [mode, setMode] = useState('text'); // 'text' or 'voice'
-  const [transcript, setTranscript] = useState('');
-  
-  const recognitionRef = useRef(null);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [displayedResponse, setDisplayedResponse] = useState('');
+  const [mode, setMode] = useState('text'); // 'text', 'voice', or 'video'
   const messagesEndRef = useRef(null);
 
-  // Initialize Web Speech API
-  useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = true;
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.lang = 'en-US';
-
-      recognitionRef.current.onresult = (event) => {
-        let interimTranscript = '';
-        let finalTranscript = '';
-
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript + ' ';
-          } else {
-            interimTranscript += transcript;
-          }
-        }
-
-        if (finalTranscript) {
-          setTranscript(prev => prev + finalTranscript);
-        } else {
-          setTranscript(interimTranscript);
-        }
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
-        setIsListening(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-      };
-    }
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-    };
-  }, []);
-
-  // Auto-scroll to bottom
-  useEffect(() => {
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const toggleListening = () => {
-    if (!recognitionRef.current) {
-      alert('Speech recognition is not supported in your browser.');
-      return;
-    }
-
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
-      if (transcript.trim()) {
-        setInputText(transcript.trim());
-      }
-      setTranscript('');
-    } else {
-      setTranscript('');
-      recognitionRef.current.start();
-      setIsListening(true);
-    }
   };
 
-  const sendMessage = async () => {
-    const messageText = inputText.trim() || transcript.trim();
-    if (!messageText || isProcessing) return;
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, displayedResponse]);
 
-    // Add user message
-    const userMessage = { role: 'user', content: messageText };
+  const simulateTyping = async (text) => {
+    setIsTyping(true);
+    setDisplayedResponse('');
+    const chars = text.split('');
+    
+    for (let i = 0; i < chars.length; i++) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+      setDisplayedResponse(prev => prev + chars[i]);
+    }
+    
+    setIsTyping(false);
+    return text;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim() || isTyping) return;
+
+    const userMessage = { role: 'user', content: input };
     setMessages(prev => [...prev, userMessage]);
-    setInputText('');
-    setTranscript('');
-    setIsProcessing(true);
+    setInput('');
 
     try {
-      // Call backend proxy endpoint
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: messageText,
-          model: selectedModel,
-          history: messages,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to get response');
-      }
-
-      const data = await response.json();
-      const assistantMessage = { role: 'assistant', content: data.response };
-      setMessages(prev => [...prev, assistantMessage]);
-
-      // Text-to-speech for voice mode
-      if (mode === 'voice' && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(data.response);
-        window.speechSynthesis.speak(utterance);
-      }
+      const response = await generateResponse([...messages, userMessage]);
+      await simulateTyping(response);
+      setMessages(prev => [...prev, { role: 'assistant', content: response }]);
+      setDisplayedResponse('');
     } catch (error) {
-      console.error('Error sending message:', error);
-      const errorMessage = {
-        role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-      };
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+      console.error('Error:', error);
+      const errorMsg = { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' };
+      setMessages(prev => [...prev, errorMsg]);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-4 border border-white/20">
-          <h1 className="text-3xl font-bold mb-4 flex items-center gap-2">
-            <MessageSquare className="w-8 h-8" />
-            Chat with Mexty
-          </h1>
-          
-          {/* Mode Toggle */}
-          <div className="flex gap-4 mb-4">
-            <button
-              onClick={() => setMode('text')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                mode === 'text'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20'
-              }`}
-            >
-              Text Chat
-            </button>
-            <button
-              onClick={() => setMode('voice')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 ${
-                mode === 'voice'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20'
-              }`}
-            >
-              <Volume2 className="w-4 h-4" />
-              Voice Chat
-            </button>
-          </div>
-
-          {/* Model Selection */}
-          <div className="flex gap-4">
-            <button
-              onClick={() => setSelectedModel('gemini')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                selectedModel === 'gemini'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20'
-              }`}
-            >
-              Gemini AI
-            </button>
-            <button
-              onClick={() => setSelectedModel('openai')}
-              className={`px-4 py-2 rounded-lg font-semibold transition-all ${
-                selectedModel === 'openai'
-                  ? 'bg-green-600 text-white'
-                  : 'bg-white/10 text-white/70 hover:bg-white/20'
-              }`}
-            >
-              OpenAI
-            </button>
-          </div>
+    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      {/* Header */}
+      <div className="bg-gray-800 border-b border-gray-700 p-4">
+        <h1 className="text-2xl font-bold text-white mb-2">Chat with Jerry's AI Twin</h1>
+        
+        {/* Mode Toggle */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMode('text')}
+            className={`px-4 py-2 rounded-lg transition-all ${
+              mode === 'text'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            📝 Text
+          </button>
+          <button
+            onClick={() => setMode('voice')}
+            className={`px-4 py-2 rounded-lg transition-all ${
+              mode === 'voice'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            🎤 Voice
+          </button>
+          <button
+            onClick={() => setMode('video')}
+            className={`px-4 py-2 rounded-lg transition-all ${
+              mode === 'video'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+            }`}
+          >
+            📹 Video
+          </button>
         </div>
 
-        {/* Chat Messages */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 mb-4 border border-white/20 h-[500px] overflow-y-auto">
-          {messages.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-white/50">
-              <p className="text-center">
-                Start a conversation by typing or using voice input.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  <div
-                    className={`max-w-[80%] px-4 py-3 rounded-2xl ${
-                      message.role === 'user'
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-white/20 text-white'
-                    }`}
-                  >
-                    <p className="whitespace-pre-wrap">{message.content}</p>
-                  </div>
-                </div>
-              ))}
-              <div ref={messagesEndRef} />
-            </div>
-          )}
-        </div>
-
-        {/* Input Area */}
-        <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
-          {/* Live Transcript Display */}
-          {isListening && transcript && (
-            <div className="mb-3 p-3 bg-white/10 rounded-lg border border-purple-500">
-              <p className="text-sm text-white/70 mb-1">Live transcript:</p>
-              <p className="text-white">{transcript}</p>
-            </div>
-          )}
-
-          <div className="flex gap-3">
-            {mode === 'voice' && (
-              <button
-                onClick={toggleListening}
-                disabled={isProcessing}
-                className={`p-3 rounded-full transition-all ${
-                  isListening
-                    ? 'bg-red-600 hover:bg-red-700 animate-pulse'
-                    : 'bg-purple-600 hover:bg-purple-700'
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                {isListening ? (
-                  <MicOff className="w-6 h-6" />
-                ) : (
-                  <Mic className="w-6 h-6" />
-                )}
-              </button>
-            )}
-
-            <input
-              type="text"
-              value={inputText || transcript}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder={mode === 'voice' ? 'Or type your message...' : 'Type your message...'}
-              disabled={isProcessing || isListening}
-              className="flex-1 px-4 py-3 bg-white/10 border border-white/20 rounded-full text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
-            />
-
-            <button
-              onClick={sendMessage}
-              disabled={(!inputText.trim() && !transcript.trim()) || isProcessing}
-              className="p-3 bg-purple-600 hover:bg-purple-700 rounded-full transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isProcessing ? (
-                <Loader2 className="w-6 h-6 animate-spin" />
-              ) : (
-                <Send className="w-6 h-6" />
-              )}
-            </button>
-          </div>
-        </div>
+        {/* Mode-specific notifications */}
+        {mode === 'voice' && (
+          <p className="text-yellow-400 text-sm mt-2">🚧 Voice mode coming soon!</p>
+        )}
+        {mode === 'video' && (
+          <p className="text-yellow-400 text-sm mt-2">🚧 Video mode coming soon!</p>
+        )}
       </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 && (
+          <div className="text-center text-gray-400 mt-10">
+            <p className="text-xl mb-2">👋 Hi! I'm Mexty, Jerry's digital twin.</p>
+            <p>Ask me anything about Jerry's work, projects, skills, or just chat!</p>
+          </div>
+        )}
+        
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            className={`flex ${
+              msg.role === 'user' ? 'justify-end' : 'justify-start'
+            }`}
+          >
+            <div
+              className={`max-w-[70%] p-4 rounded-lg ${
+                msg.role === 'user'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-700 text-gray-100'
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+            </div>
+          </div>
+        ))}
+        
+        {/* Typing animation */}
+        {isTyping && displayedResponse && (
+          <div className="flex justify-start">
+            <div className="max-w-[70%] p-4 rounded-lg bg-gray-700 text-gray-100">
+              <p className="whitespace-pre-wrap">{displayedResponse}<span className="animate-pulse">▊</span></p>
+            </div>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Input Form */}
+      <form onSubmit={handleSubmit} className="p-4 bg-gray-800 border-t border-gray-700">
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            disabled={isTyping || mode !== 'text'}
+            className="flex-1 p-3 bg-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
+          />
+          <button
+            type="submit"
+            disabled={isTyping || !input.trim() || mode !== 'text'}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            Send
+          </button>
+        </div>
+      </form>
     </div>
   );
 };
